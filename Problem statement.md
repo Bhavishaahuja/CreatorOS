@@ -1,0 +1,3 @@
+# Problem Statement
+
+Emerging Instagram creators, those with 1k–50k followers who are past the learning curve but not yet full-time, lose hours every week deciding what to post and when. The problem is not that they lack ideas. It is that no existing tool accounts for their real schedule. Tools like Apaya and Notion AI generate generic content calendars with no awareness of a full-time job, brand events, or personal commitments. CreatorOS connects to your Google Calendar and generates niche-specific content ideas built around your actual availability, turning hours of planning into minutes with a strategy that fits your real life, not a hypothetical one.
