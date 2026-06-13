@@ -54,30 +54,31 @@ export default function Onboarding() {
   };
 
   const handleSubmit = async () => {
-    setSaving(true);
-    try {
-      const { createClient } = await import("@supabase/supabase-js");
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const { error } = await supabase.from("user_profiles").insert([{
-        content_type: profile.content_type,
-        audience: profile.audience,
-        brand_type: profile.content_style,
-        goal: profile.goal,
-        posts_per_week: profile.posts_per_week,
-      }]);
-      if (error) throw error;
-      localStorage.removeItem("onboarding_progress");
-      router.push("/dashboard");
-    } catch (err) {
-      console.error("Error saving profile:", err);
-      alert("Something went wrong. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  setSaving(true);
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    const { data, error } = await supabase.from("user_profiles").insert([{
+      content_type: profile.content_type,
+      audience: profile.audience,
+      brand_type: profile.content_style,
+      goal: profile.goal,
+      posts_per_week: profile.posts_per_week,
+    }]).select();
+    if (error) throw error;
+    localStorage.setItem("profile_id", data[0].id);
+    localStorage.removeItem("onboarding_progress");
+    router.push("/calendar");
+  } catch (err) {
+    console.error("Error saving profile:", err);
+    alert("Something went wrong. Please try again.");
+  } finally {
+    setSaving(false);
+  }
+    };
 
   return (
     <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4">
