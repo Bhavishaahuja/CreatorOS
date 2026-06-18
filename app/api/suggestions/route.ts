@@ -40,6 +40,67 @@ export async function POST(request: NextRequest) {
     // Calendar not connected — continue without it
   }
 
+    // Fetch similar approved and rejected ideas from vector DB
+  let ragApproved: string[] = [];
+  let ragRejected: string[] = [];
+
+  try {
+    // Generate a generic embedding to query with (based on profile)
+    const profileText = `${profile.content_type?.join(", ")} ${profile.audience} ${profile.brand_type}`;
+    
+    const embeddingRes = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "text-embedding-3-small",
+        input: profileText,
+      }),
+    });
+
+    const embeddingData = await embeddingRes.json();
+    const queryEmbedding = embeddingData.data?.[0]?.embedding;
+
+    if (queryEmbedding) {
+      // Fetch 5 most similar approved ideas
+      const { data: approvedMatches } = await supabase.rpc("match_embeddings", {
+        query_embedding: queryEmbedding,
+        match_status: "approved",
+        match_profile_id: profileId,
+        match_count: 5,
+      });
+
+      // Fetch 5 most similar rejected ideas
+      const { data: rejectedMatches } = await supabase.rpc("match_embeddings", {
+        query_embedding: queryEmbedding,
+        match_status: "rejected",
+        match_profile_id: profileId,
+        match_count: 5,
+      });
+
+      if (approvedMatches?.length) {
+        const ids = approvedMatches.map((m: { suggestion_id: string }) => m.suggestion_id);
+        const { data: approvedIdeas } = await supabase
+          .from("content_suggestions")
+          .select("hook")
+          .in("id", ids);
+        ragApproved = approvedIdeas?.map((i: { hook: string }) => i.hook) || [];
+      }
+
+      if (rejectedMatches?.length) {
+        const ids = rejectedMatches.map((m: { suggestion_id: string }) => m.suggestion_id);
+        const { data: rejectedIdeas } = await supabase
+          .from("content_suggestions")
+          .select("hook")
+          .in("id", ids);
+        ragRejected = rejectedIdeas?.map((i: { hook: string }) => i.hook) || [];
+      }
+    }
+  } catch {
+    // RAG unavailable — continue without it
+  }
   // Build prompt
   const prompt = `You are a content strategist for Instagram creators.
 
@@ -62,7 +123,7 @@ For each idea return JSON with:
 - suggested_post_date: pick from their available days, or suggest a date in the next 4 weeks
 - why: one sentence on why this fits their goal and audience
 
-Return only a valid JSON array. No explanation outside the JSON.${rejectedHooks.length > 0 ? `\n\nDo NOT suggest ideas similar to these previously rejected concepts: ${rejectedHooks.join(", ")}` : ""}`;
+Return only a valid JSON array. No explanation outside the JSON.${ragApproved.length > 0 ? `\n\nThis creator has previously loved ideas like these — lean into similar themes: ${ragApproved.join(", ")}` : ""}${ragRejected.length > 0 ? `\n\nThey have rejected ideas like these — avoid similar concepts: ${ragRejected.join(", ")}` : ""}${rejectedHooks.length > 0 ? `\n\nAlso do NOT suggest ideas similar to these just-rejected concepts: ${rejectedHooks.join(", ")}` : ""}`;
 
   // Call Claude via OpenRouter
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
