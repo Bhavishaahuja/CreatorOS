@@ -232,7 +232,6 @@ export default function Suggestions() {
                   >
                     {s.format}
                   </span>
-                  <span className="text-xs text-zinc-400">{s.suggested_post_date}</span>
                 </div>
 
                 <h3 className="text-base font-semibold text-zinc-900 mb-2">{s.hook}</h3>

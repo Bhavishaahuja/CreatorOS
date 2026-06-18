@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-
+  const today = new Date().toISOString().split("T")[0];
   // Fetch user profile
   const { data: profile, error: profileError } = await supabase
     .from("user_profiles")
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     const embeddingData = await embeddingRes.json();
     const queryEmbedding = embeddingData.data?.[0]?.embedding;
-
+    
     if (queryEmbedding) {
       // Fetch 5 most similar approved ideas
       const { data: approvedMatches } = await supabase.rpc("match_embeddings", {
@@ -111,6 +111,7 @@ User profile:
 - Goal: ${profile.goal}
 - Posts per week target: ${profile.posts_per_week}
 
+Today's date is ${today}. Only suggest dates from today onwards.
 Their available shooting days in the next 4 weeks: ${availableDays.slice(0, 14).join(", ") || "flexible"}
 Upcoming events that could be content opportunities: ${contentOpportunities.map((e) => `${e.title} on ${e.date}`).join(", ") || "none"}
 
