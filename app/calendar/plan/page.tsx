@@ -37,23 +37,28 @@ export default function CalendarPlan() {
   }, [router]);
 
   const generateCalendar = async (profileId: string, approvedIds: string[]) => {
-    try {
-      const res = await fetch("/api/calendar/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId, approvedIds }),
-      });
-      const data = await res.json();
-      console.log("generate response:", data);
-      if (data.error) throw new Error(data.error);
-      setCalendar(data.calendar);
-    } catch (err) {
-      setError("Something went wrong. Please try again.");
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (approvedIds.length === 0) {
+        setError("No approved ideas found. Go back and approve at least 2 ideas.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/calendar/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ profileId, approvedIds }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setCalendar(data.calendar);
+      } catch (err) {
+        setError("Something went wrong. Please try again.");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const copyToClipboard = () => {
     const text = calendar

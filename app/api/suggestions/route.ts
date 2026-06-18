@@ -153,7 +153,31 @@ Return only a valid JSON array. No explanation outside the JSON.${ragApproved.le
     const jsonMatch = rawContent.match(/\[[\s\S]*\]/);
     suggestions = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
   } catch {
-    return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
+    console.log("First parse failed, retrying with stricter prompt...");
+    const retryRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        messages: [{
+          role: "user",
+          content: `${prompt}\n\nCRITICAL: Return ONLY a valid JSON array. No markdown, no code blocks, no explanation. Start your response with [ and end with ].`,
+        }],
+      }),
+    });
+    const retryData = await retryRes.json();
+    const retryContent = retryData.content?.[0]?.text;
+    try {
+      const jsonMatch = retryContent?.match(/\[[\s\S]*\]/);
+      suggestions = JSON.parse(jsonMatch ? jsonMatch[0] : retryContent);
+    } catch {
+      return NextResponse.json({ error: "Failed to parse AI response after retry" }, { status: 500 });
+    }
   }
 
   // Save suggestions to Supabase
