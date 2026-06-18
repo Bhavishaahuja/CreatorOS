@@ -67,12 +67,35 @@ export default function Suggestions() {
     }
   };
 
+  const storeEmbedding = async (suggestion: Suggestion, status: "approved" | "rejected") => {
+    const profileId = localStorage.getItem("profile_id");
+    try {
+      await fetch("/api/embeddings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          suggestionId: suggestion.id,
+          userProfileId: profileId,
+          hook: suggestion.hook,
+          concept: suggestion.concept,
+          status,
+        }),
+      });
+    } catch (err) {
+      console.error("Embedding failed (non-blocking):", err);
+    }
+  };
+
   const handleApprove = (id: string) => {
     setApproved((prev) => [...prev, id]);
+    const suggestion = suggestions.find((s) => s.id === id);
+    if (suggestion) storeEmbedding(suggestion, "approved");
   };
 
   const handleReject = (id: string) => {
     setRejected((prev) => [...prev, id]);
+    const suggestion = suggestions.find((s) => s.id === id);
+    if (suggestion) storeEmbedding(suggestion, "rejected");
   };
 
   const handleGenerateMore = () => {
