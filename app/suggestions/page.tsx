@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 
 type Suggestion = {
   id: string;
@@ -19,6 +20,11 @@ const formatColors: Record<string, string> = {
   story: "bg-orange-100 text-orange-700",
 };
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
 export default function Suggestions() {
   const router = useRouter();
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -26,6 +32,11 @@ export default function Suggestions() {
   const [error, setError] = useState("");
   const [approved, setApproved] = useState<string[]>([]);
   const [rejected, setRejected] = useState<string[]>([]);
+  const [showCustomForm, setShowCustomForm] = useState(false);
+  const [customHook, setCustomHook] = useState("");
+  const [customFormat, setCustomFormat] = useState("reel");
+  const [customDate, setCustomDate] = useState("");
+  const [savingCustom, setSavingCustom] = useState(false);
 
   useEffect(() => {
     const profileId = localStorage.getItem("profile_id");
@@ -33,21 +44,21 @@ export default function Suggestions() {
       router.push("/onboarding");
       return;
     }
-    generateSuggestions(profileId);
+    generateSuggestions(profileId, []);
   }, [router]);
 
-  const generateSuggestions = async (profileId: string) => {
+  const generateSuggestions = async (profileId: string, rejectedHooks: string[]) => {
     setLoading(true);
     setError("");
     try {
       const res = await fetch("/api/suggestions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profileId }),
+        body: JSON.stringify({ profileId, rejectedHooks }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
-      setSuggestions(data.suggestions);
+      setSuggestions((prev) => [...prev, ...data.suggestions]);
     } catch (err) {
       setError("Something went wrong generating your suggestions. Please try again.");
       console.error(err);
@@ -56,7 +67,7 @@ export default function Suggestions() {
     }
   };
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = (id: string) => {
     setApproved((prev) => [...prev, id]);
   };
 
@@ -64,11 +75,56 @@ export default function Suggestions() {
     setRejected((prev) => [...prev, id]);
   };
 
+  const handleGenerateMore = () => {
+    const profileId = localStorage.getItem("profile_id") || "";
+    const rejectedHooks = suggestions
+      .filter((s) => rejected.includes(s.id))
+      .map((s) => s.hook);
+    generateSuggestions(profileId, rejectedHooks);
+  };
+
+  const handleAddCustomIdea = async () => {
+    if (!customHook.trim() || !customDate) return;
+    setSavingCustom(true);
+    const profileId = localStorage.getItem("profile_id");
+    try {
+      const { data, error } = await supabase
+        .from("content_suggestions")
+        .insert([{
+          user_profile_id: profileId,
+          format: customFormat,
+          hook: customHook.trim(),
+          concept: "Custom idea added by creator",
+          suggested_post_date: customDate,
+          why: "Added manually by creator",
+          status: "approved",
+          user_generated: true,
+          prompt_version: "custom",
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSuggestions((prev) => [...prev, data]);
+      setApproved((prev) => [...prev, data.id]);
+      setCustomHook("");
+      setCustomDate("");
+      setCustomFormat("reel");
+      setShowCustomForm(false);
+    } catch (err) {
+      console.error("Failed to save custom idea:", err);
+      alert("Something went wrong saving your idea. Try again.");
+    } finally {
+      setSavingCustom(false);
+    }
+  };
+
   const pending = suggestions.filter(
     (s) => !approved.includes(s.id) && !rejected.includes(s.id)
   );
 
-  if (loading) {
+  if (loading && suggestions.length === 0) {
     return (
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
         <div className="text-center">
@@ -80,13 +136,13 @@ export default function Suggestions() {
     );
   }
 
-  if (error) {
+  if (error && suggestions.length === 0) {
     return (
       <div className="min-h-screen bg-zinc-50 flex items-center justify-center px-4">
         <div className="text-center">
           <p className="text-red-400 text-sm mb-4">{error}</p>
           <button
-            onClick={() => generateSuggestions(localStorage.getItem("profile_id") || "")}
+            onClick={() => generateSuggestions(localStorage.getItem("profile_id") || "", [])}
             className="px-5 py-2.5 bg-black text-white text-sm rounded-xl"
           >
             Try again
@@ -122,7 +178,7 @@ export default function Suggestions() {
                 }}
                 className="text-sm font-medium text-green-700 underline"
               >
-                Build my calendar
+                Build my calendar →
               </button>
             )}
           </div>
@@ -184,21 +240,79 @@ export default function Suggestions() {
                 )}
 
                 {isApproved && (
-                  <p className="text-sm text-green-600 font-medium">Approved</p>
+                  <p className="text-sm text-green-600 font-medium">✓ Approved</p>
                 )}
               </div>
             );
           })}
         </div>
 
+        {/* Custom idea form */}
+        <div className="mt-6">
+          {!showCustomForm ? (
+            <button
+              onClick={() => setShowCustomForm(true)}
+              className="w-full py-3 border border-dashed border-zinc-300 text-zinc-400 text-sm rounded-2xl hover:border-zinc-400 hover:text-zinc-500 transition-all"
+            >
+              + Add your own idea
+            </button>
+          ) : (
+            <div className="bg-white border border-zinc-100 rounded-2xl p-6">
+              <h3 className="text-sm font-semibold text-zinc-900 mb-4">Add your own idea</h3>
+              <div className="flex flex-col gap-3">
+                <input
+                  type="text"
+                  placeholder="Your hook or idea title"
+                  value={customHook}
+                  onChange={(e) => setCustomHook(e.target.value)}
+                  className="w-full border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 placeholder-zinc-300 focus:outline-none focus:border-zinc-400"
+                />
+                <div className="flex gap-3">
+                  <select
+                    value={customFormat}
+                    onChange={(e) => setCustomFormat(e.target.value)}
+                    className="flex-1 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400"
+                  >
+                    <option value="reel">Reel</option>
+                    <option value="carousel">Carousel</option>
+                    <option value="story">Story</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={customDate}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    className="flex-1 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+                <div className="flex gap-3 mt-1">
+                  <button
+                    onClick={handleAddCustomIdea}
+                    disabled={savingCustom || !customHook.trim() || !customDate}
+                    className="flex-1 py-2.5 bg-black text-white text-sm font-medium rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-40"
+                  >
+                    {savingCustom ? "Saving..." : "Add idea"}
+                  </button>
+                  <button
+                    onClick={() => setShowCustomForm(false)}
+                    className="flex-1 py-2.5 border border-zinc-200 text-zinc-500 text-sm rounded-xl hover:border-zinc-400 transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Generate more */}
         {pending.length === 0 && rejected.length > 0 && (
-          <div className="mt-6 text-center">
+          <div className="mt-4 text-center">
             <button
-              onClick={() => generateSuggestions(localStorage.getItem("profile_id") || "")}
-              className="px-5 py-2.5 border border-zinc-200 text-zinc-600 text-sm rounded-xl hover:border-zinc-400 transition-all"
+              onClick={handleGenerateMore}
+              disabled={loading}
+              className="px-5 py-2.5 border border-zinc-200 text-zinc-600 text-sm rounded-xl hover:border-zinc-400 transition-all disabled:opacity-40"
             >
-              Generate 10 more ideas
+              {loading ? "Generating..." : "Generate 10 more ideas"}
             </button>
           </div>
         )}

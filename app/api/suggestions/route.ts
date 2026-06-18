@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export async function POST(request: NextRequest) {
-  const { profileId } = await request.json();
-
+  const { profileId, rejectedHooks = [] } = await request.json();
   if (!profileId) {
     return NextResponse.json({ error: "No profile ID" }, { status: 400 });
   }
@@ -63,7 +62,7 @@ For each idea return JSON with:
 - suggested_post_date: pick from their available days, or suggest a date in the next 4 weeks
 - why: one sentence on why this fits their goal and audience
 
-Return only a valid JSON array. No explanation outside the JSON.`;
+Return only a valid JSON array. No explanation outside the JSON.${rejectedHooks.length > 0 ? `\n\nDo NOT suggest ideas similar to these previously rejected concepts: ${rejectedHooks.join(", ")}` : ""}`;
 
   // Call Claude via OpenRouter
   const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
